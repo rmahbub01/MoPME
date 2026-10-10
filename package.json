@@ -1,0 +1,20 @@
+{
+  "name": "mopme-notice-bot",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "check": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types test/*.test.ts",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply mopme-notice-bot --remote",
+    "db:migrate:local": "wrangler d1 migrations apply mopme-notice-bot --local"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261010.1",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.149.0"
+  }
+}
