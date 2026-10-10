@@ -168,7 +168,7 @@ async function recordFailure(d: Deps, s: Source, err: string) {
 }
 
 export async function healthReport(d: Deps): Promise<string> {
-  const lines = ["🩺 <b>Source Health</b>"];
+  const lines = ["🩺 <b>Source Health\n</b>"];
   for (const s of d.sources) {
     const st = await d.repo.getSourceState(s.id);
     const ok = st.failures === 0;
