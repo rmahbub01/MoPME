@@ -19,8 +19,8 @@ npx wrangler secret put TELEGRAM_CHAT_IDS    # comma separated
 npx wrangler secret put ADMIN_CHAT_ID
 npx wrangler secret put TELEGRAM_WEBHOOK_SECRET   # openssl rand -hex 32
 npm run deploy
-curl -i -X POST https://<worker>.<account>.workers.dev/setup-webhook \
-  -H "x-telegram-bot-api-secret-token: <TELEGRAM_WEBHOOK_SECRET>"
+curl -i -X POST "https://mopme-notice-bot.mopme.workers.dev/" \                                
+  -H "x-telegram-bot-api-secret-token: $(sed -n 's/^TELEGRAM_WEBHOOK_SECRET=//p' .dev.vars)"
 ```
 Replace the URL and secret placeholders with their actual values (without angle brackets). The request header must match `TELEGRAM_WEBHOOK_SECRET` exactly. `.dev.vars` is only used by `wrangler dev`; deployed Workers need their own secrets, which can be checked with `npx wrangler secret list` and set with `npx wrangler secret put <NAME>`. Telegram setup failures return HTTP 502 with the upstream error instead of a generic Cloudflare exception.
 Telegram updates are accepted at both `/webhook` and `/` so an older root-path webhook continues to work; the setup command registers `/webhook`.
