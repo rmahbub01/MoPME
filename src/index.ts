@@ -25,7 +25,6 @@ function build(env: Env): { deps: Deps; tg: TelegramClient } {
     settings: {
       chatIds: env.TELEGRAM_CHAT_IDS.split(",").map((s) => s.trim()).filter(Boolean),
       adminChatId: env.ADMIN_CHAT_ID,
-      maxPerRun: 8,
       failureAlertThreshold: 5,
     },
   };

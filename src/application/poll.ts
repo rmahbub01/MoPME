@@ -25,9 +25,9 @@ const MAX_FILES = 3;
 export const noticeId = (sourceId: string, n: ParsedNotice) =>
   sha256Hex(`${sourceId}|${n.url}|${n.title}`).then((h) => `${sourceId}:${h.slice(0, 24)}`);
 
-/** Scheduled mode: today's (Dhaka) notices. Force mode: anything tagged নতুন. */
+/** Scheduled mode: notices dated today (Asia/Dhaka). Force mode: all listed notices. */
 export const isEligible = (n: ParsedNotice, force: boolean, today: string) =>
-  force ? n.isNew || n.publishedOn === today : n.publishedOn === today;
+  force || n.publishedOn === today;
 
 export async function poll(d: Deps, opts: { force: boolean }): Promise<PollReport> {
   return runPoll(d, {
@@ -58,10 +58,8 @@ async function runPoll(
   }
   try {
     const today = todayInDhaka(d.clock.now());
-    let budget = d.settings.maxPerRun; // keeps us under the Workers subrequest cap
 
     for (const source of d.sources) {
-      if (budget <= 0) break;
       let items: ParsedNotice[];
       try {
         items = await d.scraper.listing(source);
@@ -80,13 +78,11 @@ async function runPoll(
 
       const candidates = opts.latestOnly ? latestNotice(items) : items.filter((i) => isEligible(i, opts.force, today));
       for (const item of candidates) {
-        if (budget <= 0) break;
         const notice: Notice = { ...item, sourceId: source.id, id: await noticeId(source.id, item) };
         const done = opts.resend ? new Set<string>() : await d.repo.deliveredChats(notice.id);
         const pending = opts.recipients.filter((c) => !done.has(c));
         if (!pending.length) continue;
 
-        budget--;
         await d.repo.saveNotice(notice);
         if (!notice.files.length) {
           notice.files = await d.scraper.detailFiles(notice.url).catch((error: unknown) => {
@@ -125,11 +121,11 @@ async function runPoll(
 }
 
 function latestNotice(items: ParsedNotice[]): ParsedNotice[] {
-  let latest: ParsedNotice | undefined;
-  for (const item of items) {
-    if (!latest || (item.publishedOn ?? "") > (latest.publishedOn ?? "")) latest = item;
-  }
-  return latest ? [latest] : [];
+  const latestDate = items.reduce(
+    (latest, item) => (item.publishedOn > latest ? item.publishedOn : latest),
+    "",
+  );
+  return latestDate ? items.filter((item) => item.publishedOn === latestDate) : [];
 }
 
 async function recordOk(d: Deps, s: Source) {
@@ -168,7 +164,7 @@ async function recordFailure(d: Deps, s: Source, err: string) {
 }
 
 export async function healthReport(d: Deps): Promise<string> {
-  const lines = ["🩺 <b>Source Health\n</b>"];
+  const lines = ["🩺 <b>Source Health</b>"];
   for (const s of d.sources) {
     const st = await d.repo.getSourceState(s.id);
     const ok = st.failures === 0;

@@ -27,6 +27,5 @@ export interface Clock {
 export interface Settings {
   chatIds: string[];
   adminChatId: string;
-  maxPerRun: number;
   failureAlertThreshold: number;
 }

@@ -64,7 +64,7 @@ npx wrangler delete mopme-notice-bot
 npx wrangler d1 delete mopme-notice-bot
 ```
 
-Admin commands (private/admin chat only): `/force` sends the newest available notice from each source to the admin, even if already delivered (newest publication date wins; if dates are missing, the first listed notice is used); `/health` reports source status. The HTTP health endpoint is `GET /healthz`; it is separate from the Telegram `/health` command.
+Admin commands (private/admin chat only): `/force` sends every notice from each source's newest publication date to the admin, even if already delivered; `/health` reports source status. The HTTP health endpoint is `GET /healthz`; it is separate from the Telegram `/health` command.
 
 ## Troubleshooting
 
@@ -84,9 +84,8 @@ npm run check              # typecheck
 ```
 
 ## Notes
-- Scheduled = notices dated today (Asia/Dhaka). `/force` sends only the newest notice from each source to the admin.
+- Scheduled polling sends every notice dated today (Asia/Dhaka), from every configured source, without a per-run notice limit. Notices already delivered to a channel are skipped. `/force` sends all notices from each source's newest publication date to the admin.
 - Notices without a recognized publication date are skipped rather than sent with a missing-date placeholder; the parser recognizes numeric dates and Bengali/English month names.
-- Max 8 notices/run (Workers subrequest cap); rest go next run.
 - Parser is heuristic (table rows / list items with link + date). If a portal changes layout, `/health` alerts after 5 failures; tune `src/infrastructure/html-parser.ts`.
 - Broken-TLS portals can't be fetched from Workers (no verify-off).
 - Dev: `npm run check`, `npm test`.
