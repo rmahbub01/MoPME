@@ -84,7 +84,8 @@ npm run check              # typecheck
 ```
 
 ## Notes
-- Scheduled polling sends every notice dated today (Asia/Dhaka), from every configured source, without a per-run notice limit. Notices already delivered to a channel are skipped. `/force` sends all notices from each source's newest publication date to the admin.
+- Scheduled polling sends every notice dated within the last three days (Asia/Dhaka), from every configured source, so a temporary source failure does not permanently miss a notice. Notices already delivered to a channel are skipped. `/force` sends all notices from each source's newest publication date to the admin.
+- Notice attachments are read only from the listing page and sent as Telegram document albums (up to ten documents per album), without dropping extra files.
 - Notices without a recognized publication date are skipped rather than sent with a missing-date placeholder; the parser recognizes numeric dates and Bengali/English month names.
 - Parser is heuristic (table rows / list items with link + date). If a portal changes layout, `/health` alerts after 5 failures; tune `src/infrastructure/html-parser.ts`.
 - Broken-TLS portals can't be fetched from Workers (no verify-off).

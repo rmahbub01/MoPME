@@ -27,7 +27,6 @@ test("latest admin poll sends the newest notice per source to admin, including d
     },
     scraper: {
       listing: async (source) => noticesBySource.get(source.id) ?? [],
-      detailFiles: async () => [],
     },
     notifier: {
       sendNotice: async (chatId, _source, notice) => {
@@ -89,7 +88,6 @@ test("latest admin poll sends every notice from each source's newest date", asyn
     },
     scraper: {
       listing: async (source) => noticesBySource.get(source.id) ?? [],
-      detailFiles: async () => [],
     },
     notifier: {
       sendNotice: async (_chatId, _source, notice) => {
@@ -125,7 +123,7 @@ test("scheduled polling sends all today's notices, ignores the new badge, and sk
   const oldNewNotice: ParsedNotice = {
     title: "Old notice still marked new",
     url: `https://example.com/${source.id}/old-new`,
-    publishedOn: "2026-10-09",
+    publishedOn: "2026-10-01",
     isNew: true,
     files: [],
   };
@@ -143,7 +141,6 @@ test("scheduled polling sends all today's notices, ignores the new badge, and sk
     },
     scraper: {
       listing: async (listedSource) => listedSource.id === source.id ? [...notices, oldNewNotice] : [],
-      detailFiles: async () => [],
     },
     notifier: {
       sendNotice: async (_chatId, _source, notice) => {
@@ -164,7 +161,7 @@ test("scheduled polling sends all today's notices, ignores the new badge, and sk
 
   assert.equal(report.sent, notices.length - 1);
   assert.equal(sent.some((notice) => notice.title === oldNewNotice.title), false);
-  assert.equal(isEligible(oldNewNotice, false, today), false);
+  assert.equal(isEligible(oldNewNotice, false, today, 3), false);
 });
 
 test("health report includes an escaped source error for troubleshooting", async () => {
@@ -184,4 +181,39 @@ test("health report includes an escaped source error for troubleshooting", async
 
   assert.match(report, /<b>Source Health<\/b>/);
   assert.match(report, /<code>HTTP 503 &lt;temporary outage&gt;<\/code>/);
+});
+
+test("scheduled polling sends listing-page attachments without fetching detail pages", async () => {
+  const source = SOURCES[0]!;
+  const notice: ParsedNotice = {
+    title: "Notice with all attachments",
+    url: "https://example.com/notices/complete",
+    publishedOn: "2026-10-10",
+    isNew: true,
+    files: ["https://example.com/files/listing.pdf"],
+  };
+  let sent: Notice | undefined;
+  const deps: Deps = {
+    repo: {
+      saveNotice: async () => {},
+      deliveredChats: async () => new Set(),
+      markDelivered: async () => {},
+      getSourceState: async () => ({ failures: 0, alerted: false, lastOkAt: null, lastError: null }),
+      saveSourceState: async () => {},
+      acquireLock: async () => true,
+      releaseLock: async () => {},
+    },
+    scraper: { listing: async () => [notice] },
+    notifier: {
+      sendNotice: async (_chatId, _source, value) => { sent = value; },
+      sendText: async () => {},
+    },
+    clock: { now: () => Date.parse("2026-10-10T12:00:00Z") },
+    settings: { chatIds: ["channel"], adminChatId: "admin", failureAlertThreshold: 5 },
+    sources: [source],
+  };
+
+  await poll(deps, { force: false });
+
+  assert.deepEqual(sent?.files, ["https://example.com/files/listing.pdf"]);
 });

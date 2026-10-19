@@ -1,6 +1,6 @@
 import type { Scraper } from "../application/ports.ts";
 import type { Source } from "../domain/types.ts";
-import { extractFileLinks, parseNotices } from "./html-parser.ts";
+import { parseNotices } from "./html-parser.ts";
 
 const HEADERS = {
   "user-agent": "Mozilla/5.0 (compatible; MoPMENoticeBot/2.0)",
@@ -19,10 +19,5 @@ export class HttpScraper implements Scraper {
     const items = parseNotices(await getHtml(source.listUrl), source.listUrl);
     if (!items.length) throw new Error(`no notice rows with a recognized title and publication date parsed from ${source.listUrl}`);
     return items;
-  }
-
-  async detailFiles(url: string) {
-    if (/\.(pdf|docx?|xlsx?|jpe?g|png)(\?|$)/i.test(url)) return [url];
-    return extractFileLinks(await getHtml(url), url);
   }
 }

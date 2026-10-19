@@ -20,14 +20,20 @@ export interface PollReport {
 }
 
 const LOCK = "poll";
-const MAX_FILES = 3;
+const SCHEDULED_LOOKBACK_DAYS = 3;
 
 export const noticeId = (sourceId: string, n: ParsedNotice) =>
   sha256Hex(`${sourceId}|${n.url}|${n.title}`).then((h) => `${sourceId}:${h.slice(0, 24)}`);
 
-/** Scheduled mode: notices dated today (Asia/Dhaka). Force mode: all listed notices. */
-export const isEligible = (n: ParsedNotice, force: boolean, today: string) =>
-  force || n.publishedOn === today;
+/** Scheduled mode: recent notices (Asia/Dhaka). Force mode: all listed notices. */
+export const isEligible = (n: ParsedNotice, force: boolean, today: string, lookbackDays = 0) => {
+  if (force) return true;
+  const todayTime = Date.parse(`${today}T00:00:00Z`);
+  const publishedTime = Date.parse(`${n.publishedOn}T00:00:00Z`);
+  return Number.isFinite(todayTime) && Number.isFinite(publishedTime)
+    && publishedTime >= todayTime - lookbackDays * 86_400_000
+    && publishedTime <= todayTime;
+};
 
 export async function poll(d: Deps, opts: { force: boolean }): Promise<PollReport> {
   return runPoll(d, {
@@ -76,7 +82,9 @@ async function runPoll(
         continue;
       }
 
-      const candidates = opts.latestOnly ? latestNotice(items) : items.filter((i) => isEligible(i, opts.force, today));
+      const candidates = opts.latestOnly
+        ? latestNotice(items)
+        : items.filter((i) => isEligible(i, opts.force, today, SCHEDULED_LOOKBACK_DAYS));
       for (const item of candidates) {
         const notice: Notice = { ...item, sourceId: source.id, id: await noticeId(source.id, item) };
         const done = opts.resend ? new Set<string>() : await d.repo.deliveredChats(notice.id);
@@ -84,18 +92,6 @@ async function runPoll(
         if (!pending.length) continue;
 
         await d.repo.saveNotice(notice);
-        if (!notice.files.length) {
-          notice.files = await d.scraper.detailFiles(notice.url).catch((error: unknown) => {
-            console.error(JSON.stringify({
-              event: "notice_poll_error",
-              source: source.id,
-              stage: "attachment_lookup",
-              error: briefError(error),
-            }));
-            return [];
-          });
-        }
-        notice.files = notice.files.slice(0, MAX_FILES);
 
         for (const chat of pending) {
           try {

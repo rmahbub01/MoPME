@@ -12,7 +12,6 @@ export interface NoticeRepo {
 
 export interface Scraper {
   listing(source: Source): Promise<ParsedNotice[]>;
-  detailFiles(url: string): Promise<string[]>;
 }
 
 export interface Notifier {

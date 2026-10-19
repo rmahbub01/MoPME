@@ -150,7 +150,3 @@ export function parseNotices(html: string, baseUrl: string): ParsedNotice[] {
 
   return [...found.values()];
 }
-
-export function extractFileLinks(html: string, baseUrl: string): string[] {
-  return [...new Set(anchors(html, baseUrl).filter((l) => FILE_RE.test(l.href)).map((l) => l.href))];
-}

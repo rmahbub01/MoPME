@@ -3,6 +3,10 @@ import { escapeHtml, truncate } from "../domain/text.ts";
 import type { Notice, Source } from "../domain/types.ts";
 
 type Json = Record<string, unknown>;
+const MEDIA_GROUP_LIMIT = 10;
+interface SentMessage {
+  message_id: number;
+}
 
 export class TelegramClient implements Notifier {
   private token: string;
@@ -40,7 +44,7 @@ export class TelegramClient implements Notifier {
     const caption = [
       "📍 <b>নতুন বিজ্ঞপ্তি</b>",
       "",
-      `<b>শিরোনাম:</b> ${escapeHtml(truncate(n.title, 600))}`,
+      `<b>শিরোনাম:</b> ${escapeHtml(truncate(n.title, 500))}`,
       "",
       `📅 প্রকাশের তারিখ: ${date}`,
       `🏢 প্রকাশক: ${escapeHtml(source.name)}`,
@@ -48,32 +52,55 @@ export class TelegramClient implements Notifier {
       "",
       `#${escapeHtml(source.id)}`,
     ].join("\n");
-    const keyboard = { inline_keyboard: [[{ text: "🔗 বিস্তারিত দেখুন", url: n.url }]] };
 
     if (n.files.length) {
-      try {
-        const [first, ...rest] = n.files;
-        await this.call("sendDocument", {
+      for (let start = 0; start < n.files.length; start += MEDIA_GROUP_LIMIT) {
+        const files = n.files.slice(start, start + MEDIA_GROUP_LIMIT);
+        const uploads = await Promise.all(files.map(async (url, index) => {
+          const response = await fetch(url, { signal: AbortSignal.timeout(15_000), redirect: "follow" });
+          if (!response.ok) throw new Error(`attachment HTTP ${response.status}: ${url}`);
+          const name = decodeURIComponent(new URL(url).pathname.split("/").pop() || `attachment-${index + 1}`);
+          return { name, blob: await response.blob() };
+        }));
+        const media = uploads.map((upload, index) => ({
+          type: "document",
+          media: `attach://file${index}`,
+        }));
+        const form = new FormData();
+        form.append("chat_id", chatId);
+        form.append("media", JSON.stringify(media));
+        uploads.forEach((upload, index) => form.append(`file${index}`, upload.blob, upload.name));
+        const messages = await this.callMultipart<SentMessage[]>("sendMediaGroup", form);
+        const lastMessage = messages.at(-1);
+        if (!lastMessage) throw new Error("telegram sendMediaGroup returned no messages");
+        await this.call("editMessageCaption", {
           chat_id: chatId,
-          document: first,
-          caption: truncate(caption, 1000),
+          message_id: lastMessage.message_id,
+          caption,
           parse_mode: "HTML",
-          reply_markup: keyboard,
+          reply_markup: { inline_keyboard: [[{ text: "🔗 বিস্তারিত দেখুন", url: n.url }]] },
         });
-        for (const f of rest) await this.call("sendDocument", { chat_id: chatId, document: f });
-        return;
-      } catch {
-        // Telegram could not fetch the file (broken TLS, blocked…) → fall back to links.
       }
+      return;
     }
-    const fileRows = n.files.map((f, i) => [{ text: `📎 ফাইল ${i + 1}`, url: f }]);
     await this.call("sendMessage", {
       chat_id: chatId,
       text: caption,
       parse_mode: "HTML",
       link_preview_options: { is_disabled: true },
-      reply_markup: { inline_keyboard: [...keyboard.inline_keyboard, ...fileRows] },
+      reply_markup: { inline_keyboard: [[{ text: "🔗 বিস্তারিত দেখুন", url: n.url }]] },
     });
+  }
+
+  private async callMultipart<T = unknown>(method: string, body: FormData): Promise<T> {
+    const res = await fetch(`https://api.telegram.org/bot${this.token}/${method}`, {
+      method: "POST",
+      body,
+      signal: AbortSignal.timeout(30_000),
+    });
+    const data = (await res.json()) as { ok: boolean; result: T; description?: string };
+    if (!data.ok) throw new Error(`telegram ${method}: ${data.description ?? res.status}`);
+    return data.result;
   }
 
   setWebhook(url: string, secret: string) {
