@@ -43,7 +43,7 @@ export class TelegramClient implements Notifier {
     const fileCount = String(n.files.length).replace(/\d/g, (digit) => "০১২৩৪৫৬৭৮৯"[Number(digit)]!);
     const caption = (includeLink: boolean) => [
       "",
-      "📢 <b>নতুন বিজ্ঞপ্তি</b>",
+      "📌 <b>নতুন বিজ্ঞপ্তি</b>",
       "",
       `<b>শিরোনাম:</b> ${escapeHtml(truncate(n.title, 500))}`,
       "",
