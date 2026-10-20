@@ -41,8 +41,9 @@ export class TelegramClient implements Notifier {
   async sendNotice(chatId: string, source: Source, n: Notice) {
     const date = n.publishedOn.split("-").reverse().join("-").replace(/\d/g, (digit) => "০১২৩৪৫৬৭৮৯"[Number(digit)]!);
     const fileCount = String(n.files.length).replace(/\d/g, (digit) => "০১২৩৪৫৬৭৮৯"[Number(digit)]!);
-    const caption = [
-      "📍 <b>নতুন বিজ্ঞপ্তি</b>",
+    const caption = (includeLink: boolean) => [
+      "",
+      "📢 <b>নতুন বিজ্ঞপ্তি</b>",
       "",
       `<b>শিরোনাম:</b> ${escapeHtml(truncate(n.title, 500))}`,
       "",
@@ -50,8 +51,25 @@ export class TelegramClient implements Notifier {
       `🏢 প্রকাশক: ${escapeHtml(source.name)}`,
       `📎 সংযুক্ত নথি: ${fileCount}`,
       "",
+      ...(includeLink ? [`<a href="${escapeHtml(n.url)}">🔗 বিস্তারিত দেখুন</a>`, ""] : []),
       `#${escapeHtml(source.id)}`,
     ].join("\n");
+
+    if (n.files.length === 1) {
+      const response = await fetch(n.files[0]!, { signal: AbortSignal.timeout(15_000), redirect: "follow" });
+      if (!response.ok) throw new Error(`attachment HTTP ${response.status}: ${n.files[0]}`);
+      const name = decodeURIComponent(new URL(n.files[0]!).pathname.split("/").pop() || "attachment-1");
+      const form = new FormData();
+      form.append("chat_id", chatId);
+      form.append("document", await response.blob(), name);
+      form.append("caption", caption(false));
+      form.append("parse_mode", "HTML");
+      form.append("reply_markup", JSON.stringify({
+        inline_keyboard: [[{ text: "🔗 বিস্তারিত দেখুন", url: n.url }]],
+      }));
+      await this.callMultipart("sendDocument", form);
+      return;
+    }
 
     if (n.files.length) {
       for (let start = 0; start < n.files.length; start += MEDIA_GROUP_LIMIT) {
@@ -76,16 +94,15 @@ export class TelegramClient implements Notifier {
         await this.call("editMessageCaption", {
           chat_id: chatId,
           message_id: lastMessage.message_id,
-          caption,
+          caption: caption(true),
           parse_mode: "HTML",
-          reply_markup: { inline_keyboard: [[{ text: "🔗 বিস্তারিত দেখুন", url: n.url }]] },
         });
       }
       return;
     }
     await this.call("sendMessage", {
       chat_id: chatId,
-      text: caption,
+      text: caption(false),
       parse_mode: "HTML",
       link_preview_options: { is_disabled: true },
       reply_markup: { inline_keyboard: [[{ text: "🔗 বিস্তারিত দেখুন", url: n.url }]] },

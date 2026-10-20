@@ -67,9 +67,65 @@ test("notice caption follows the requested Bengali layout", async () => {
     "🏢 প্রকাশক: জেলা প্রাথমিক শিক্ষা অফিস, মুন্সিগঞ্জ",
     "📎 সংযুক্ত নথি: ৪",
     "",
+    `<a href="${notice.url}">🔗 বিস্তারিত দেখুন</a>`,
+    "",
     "#dpe_munshiganj",
   ].join("\n"));
-  assert.deepEqual(requestBodies[1]!.reply_markup, {
+  assert.equal("reply_markup" in requestBodies[1]!, false);
+});
+
+test("single attachment includes the caption and detail button in one document upload", async () => {
+  let requestBody: FormData | undefined;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    if (String(input).includes("/sendDocument")) {
+      requestBody = init?.body as FormData;
+      return Response.json({ ok: true, result: { message_id: 105 } });
+    }
+    if (typeof input === "string" && input.startsWith("https://example.com/")) {
+      return new Response(new Blob(["file"]), { status: 200 });
+    }
+    throw new Error(`unexpected request: ${String(input)}`);
+  };
+
+  const source: Source = {
+    id: "dpe_munshiganj",
+    name: "জেলা প্রাথমিক শিক্ষা অফিস, মুন্সিগঞ্জ",
+    emoji: "📍",
+    listUrl: "https://example.com/notices",
+  };
+  const notice: Notice = {
+    id: "notice-id",
+    sourceId: source.id,
+    title: "একটি সংযুক্তি",
+    url: "https://example.com/notices/2",
+    publishedOn: "2026-10-05",
+    isNew: true,
+    files: ["https://example.com/notices/2.pdf"],
+  };
+
+  try {
+    await new TelegramClient("test-token").sendNotice("admin", source, notice);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.ok(requestBody);
+  assert.equal(requestBody!.get("chat_id"), "admin");
+  assert.equal(requestBody!.get("parse_mode"), "HTML");
+  assert.equal(requestBody!.get("caption"), [
+    "📍 <b>নতুন বিজ্ঞপ্তি</b>",
+    "",
+    "<b>শিরোনাম:</b> একটি সংযুক্তি",
+    "",
+    "📅 প্রকাশের তারিখ: ০৫-১০-২০২৬",
+    "🏢 প্রকাশক: জেলা প্রাথমিক শিক্ষা অফিস, মুন্সিগঞ্জ",
+    "📎 সংযুক্ত নথি: ১",
+    "",
+    "#dpe_munshiganj",
+  ].join("\n"));
+  assert.deepEqual(JSON.parse(String(requestBody!.get("reply_markup"))), {
     inline_keyboard: [[{ text: "🔗 বিস্তারিত দেখুন", url: notice.url }]],
   });
+  assert.ok(requestBody!.get("document"));
 });
